@@ -4,10 +4,38 @@ import { randomBytes, timingSafeEqual, createHmac } from 'node:crypto';
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const MAX_BODY_BYTES = 2_000_000;
 class HttpError extends Error { constructor(status,message){super(message);this.status=status;} }
-function cfg(){
- const endpoint=(process.env.APPWRITE_ENDPOINT||'https://sfo.cloud.appwrite.io/v1').replace(/\/$/,'');
- const c={endpoint,project:process.env.APPWRITE_PROJECT_ID,key:process.env.APPWRITE_API_KEY,db:process.env.APPWRITE_DATABASE_ID,products:process.env.APPWRITE_PRODUCTS_TABLE_ID,finance:process.env.APPWRITE_FINANCE_TABLE_ID,analytics:process.env.APPWRITE_ANALYTICS_TABLE_ID,bucket:process.env.APPWRITE_PRODUCTS_BUCKET_ID};
- if(!c.project||!c.key||!c.db||!c.products)throw new HttpError(500,'Configuración de Appwrite incompleta.'); return c;
+function cfg() {
+    const endpoint = (
+    process.env.APPWRITE_ENDPOINT ||
+    'https://sfo.cloud.appwrite.io/v1'
+    ).replace(/\/$/, '');
+
+const c = {
+    endpoint,
+    project: process.env.APPWRITE_PROJECT_ID,
+    key: process.env.APPWRITE_API_KEY,
+    db: process.env.APPWRITE_DATABASE_ID,
+    products: process.env.APPWRITE_PRODUCTS_TABLE_ID,
+    finance: process.env.APPWRITE_FINANCE_TABLE_ID,
+    analytics: process.env.APPWRITE_ANALYTICS_TABLE_ID,
+    bucket: process.env.APPWRITE_PRODUCTS_BUCKET_ID
+};
+
+const missing = [];
+
+if (!c.project) missing.push('APPWRITE_PROJECT_ID');
+if (!c.key) missing.push('APPWRITE_API_KEY');
+if (!c.db) missing.push('APPWRITE_DATABASE_ID');
+if (!c.products) missing.push('APPWRITE_PRODUCTS_TABLE_ID');
+
+if (missing.length) {
+    throw new HttpError(
+        500,
+        `Faltan variables de entorno: ${missing.join(', ')}`
+    );
+}
+
+return c;
 }
 function safeEqual(a,b){const x=Buffer.from(String(a||'')),y=Buffer.from(String(b||''));return x.length===y.length&&x.length>0&&timingSafeEqual(x,y);}
 function parseBody(req){if(req.bodyJson&&typeof req.bodyJson==='object')return req.bodyJson;const raw=req.bodyText??req.body??'{}';if(typeof raw==='string'&&raw.length>MAX_BODY_BYTES)throw new HttpError(413,'Solicitud demasiado grande.');try{return JSON.parse(raw||'{}')}catch{throw new HttpError(400,'JSON inválido.');}}
