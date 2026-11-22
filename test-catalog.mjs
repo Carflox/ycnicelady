@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import handler from './appwrite-functions/catalog/main.js';
+Object.assign(process.env,{APPWRITE_PROJECT_ID:'test-project',APPWRITE_API_KEY:'test-key',APPWRITE_DATABASE_ID:'test-db',APPWRITE_PRODUCTS_TABLE_ID:'test-table'});
+const oldFetch=globalThis.fetch;
+const rows=[{$id:'b',name:'Producto B',price:12,stock:3,is_active:true,sort_order:2},{$id:'a',name:'Producto A',price:8,stock:2,is_active:true,sort_order:1},{$id:'x',name:'Oculto',price:4,stock:9,is_active:false,sort_order:0}];
+let payload,status;const res={json:(data,s=200)=>{payload=data;status=s;return data}};
+globalThis.fetch=async(url,opts)=>({ok:true,status:200,json:async()=>({rows})});
+await handler({req:{bodyJson:{}},res,log(){},error(){}});assert.equal(status,200);assert.equal(payload.length,2);assert.equal(payload[0].id,'a');assert.equal(payload[1].id,'b');
+let decrements=0;globalThis.fetch=async(url,opts)=>{if(url.endsWith('/rows/a'))return {ok:true,status:200,json:async()=>rows[1]};if(url.endsWith('/rows/a/stock/decrement')){decrements++;return {ok:true,status:200,json:async()=>({})}};return {ok:true,status:200,json:async()=>({})};};
+await handler({req:{bodyJson:{order_items:[{id:'a',quantity:1}]}},res,log(){},error(){}});assert.equal(status,200);assert.equal(payload.success,true);assert.equal(decrements,1);
+globalThis.fetch=oldFetch;console.log('PASS: catálogo filtra activos, ordena y simula reserva de stock.');

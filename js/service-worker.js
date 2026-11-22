@@ -1,5 +1,5 @@
-const VERSION = 'appwrite-20261121-1';
-const SHELL_CACHE = 'yc-nice-lady-shell-v14-appwrite';
+const VERSION = 'appwrite-20261121-2';
+const SHELL_CACHE = 'yc-nice-lady-shell-v15-appwrite';
 const IMAGE_CACHE = 'yc-nice-lady-images-v1';
 const IMAGE_CACHE_LIMIT = 120;
 
