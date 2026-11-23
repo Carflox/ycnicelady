@@ -42,6 +42,7 @@ const productsCacheKey = 'yc-nice-lady-public-products-v1';
 let products = [];
 let cart = loadCart();
 let catalogIsFresh = false;
+let catalogViewTracked = false;
 const kitSelections = new Map();
 let pendingKitClickTimer = null;
 
@@ -204,7 +205,7 @@ function getCartQuantity(id) {
 
 function trackStoreEvent(eventType, { product = null, quantity = 1 } = {}) {
   if (
-    !['add_to_cart', 'whatsapp_click'].includes(eventType) ||
+    !['catalog_view', 'product_view', 'add_to_cart', 'whatsapp_click'].includes(eventType) ||
     !APPWRITE_ANALYTICS_FUNCTION_ID
   ) {
     return;
@@ -214,7 +215,12 @@ function trackStoreEvent(eventType, { product = null, quantity = 1 } = {}) {
     event_type: eventType,
     product_id: product?.id || null,
     product_name: product?.name ||
-      (eventType === 'whatsapp_click' ? 'Pedido por WhatsApp' : 'Producto'),
+      ({
+        catalog_view: 'Catálogo',
+        product_view: 'Producto',
+        whatsapp_click: 'Pedido por WhatsApp'
+      })[eventType] ||
+      'Producto',
     quantity: Math.max(1, Math.min(1000, Math.trunc(Number(quantity) || 1)))
   };
 
@@ -731,6 +737,10 @@ async function loadProducts({ loading = true } = {}) {
     try {
       products = await fetchCatalogue();
       catalogIsFresh = true;
+      if (!catalogViewTracked) {
+        trackStoreEvent('catalog_view');
+        catalogViewTracked = true;
+      }
 
       try {
         localStorage.setItem(productsCacheKey, JSON.stringify(products));
@@ -1079,6 +1089,7 @@ grid.addEventListener('dblclick', event => {
 function openProductPhoto(product) {
   if (!product) return;
 
+  trackStoreEvent('product_view', { product });
   window.catalogueReturnPosition = window.scrollY;
 
   const previewImage = document.querySelector('#previewImage');

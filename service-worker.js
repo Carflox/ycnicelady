@@ -1,5 +1,5 @@
-const VERSION = 'appwrite-20261122-2';
-const SHELL_CACHE = 'yc-nice-lady-shell-v17-appwrite';
+const VERSION = 'finance-analytics-20261122-3';
+const SHELL_CACHE = 'yc-nice-lady-shell-v18-finance-analytics';
 const IMAGE_CACHE = 'yc-nice-lady-images-v2';
 const IMAGE_CACHE_LIMIT = 120;
 

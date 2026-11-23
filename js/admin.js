@@ -7,6 +7,7 @@
     const ENDPOINT = String(config.appwriteEndpoint || '').replace(/\/$/, '');
     const PROJECT = config.appwriteProjectId;
     const ADMIN_FUNCTION = config.appwriteAdminFunctionId;
+    const ANALYTICS_FUNCTION = config.appwriteAnalyticsFunctionId;
     const BUCKET = config.appwriteProductsBucket;
     const TOKEN_KEY = 'yc-nice-lady-admin-token';
     const KIT_CATEGORIES = ['libros', 'set'];
@@ -29,6 +30,7 @@ const loginForm = $('loginForm');
 const productForm = $('productForm');
 const financeSaleForm = $('financeSaleForm');
 const financeExpenseForm = $('financeExpenseForm');
+const sunatForm = $('sunatForm');
 const financeSaleProduct = $('financeSaleProduct');
 const financeExpenseProduct = $('financeExpenseProduct');
 const adminProducts = $('adminProducts');
@@ -39,6 +41,10 @@ let token = '';
 let products = [];
 let entries = [];
 let events = [];
+let sunatRecords = [];
+let financeIsConfigured = true;
+let sunatIsConfigured = true;
+let analyticsIsConfigured = true;
 let kitRows = [];
 let dragId = null;
 
@@ -69,6 +75,23 @@ const formatDate = value => {
     ? ''
     : date.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
 };
+
+const localDateValue = (date = new Date()) => {
+    const pad = number => String(number).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+function isInRange(value, range) {
+    if (range === 'all') return true;
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return false;
+
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - Number(range) + 1);
+    return date >= start && date <= new Date();
+}
 
 const toLocalInput = (date = new Date()) => {
     const pad = number => String(number).padStart(2, '0');
@@ -656,7 +679,7 @@ function pieChart(items) {
     return `<div class="pie-layout" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
     <div class="pie-chart" role="img" style="width:140px;height:140px;border-radius:50%;background:conic-gradient(${slices.join(',')})"></div>
         <ul class="pie-legend" style="list-style:none;margin:0;padding:0">${items.map(item =>
-        `<li><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color};margin-right:6px"></span>${escapeHtml(item.label)}: <strong>${item.value}</strong></li>`).join('')}</ul>
+        `<li><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color};margin-right:6px"></span>${escapeHtml(item.label)}: <strong>${escapeHtml(item.text ?? item.value)}</strong></li>`).join('')}</ul>
     </div>`;
 }
 
@@ -717,11 +740,71 @@ function resetFinanceForms() {
     field(financeSaleForm, 'created_at').value = toLocalInput();
     field(financeExpenseForm, 'created_at').value = toLocalInput();
     field(financeSaleForm, 'analytics_event_id').value = '';
+    resetSunatForm();
     updateExpenseFields();
 }
 
+function resetSunatForm() {
+    sunatForm.reset();
+    field(sunatForm, 'id').value = '';
+    field(sunatForm, 'tax_period').value = localDateValue().slice(0, 7);
+    field(sunatForm, 'due_date').value = localDateValue();
+    field(sunatForm, 'paid_at').value = localDateValue();
+    updateSunatPaymentFields();
+}
+
 function updateExpenseFields() {
-    $('financeInventoryProductWrap').hidden = field(financeExpenseForm, 'category').value !== 'productos';
+    const inventory = field(financeExpenseForm, 'category').value === 'productos';
+    $('financeInventoryProductWrap').hidden = !inventory;
+    field(financeExpenseForm, 'supplier').required = inventory;
+}
+
+function updateSunatPaymentFields() {
+    const paid = field(sunatForm, 'status').value === 'paid';
+    const paymentFields = $('sunatPaymentFields');
+    paymentFields.hidden = !paid;
+    field(sunatForm, 'paid_at').required = paid;
+    field(sunatForm, 'payment_method').required = paid;
+}
+
+function renderSunat(records = sunatRecords) {
+    $('sunatForm').querySelector('[type="submit"]').disabled = !sunatIsConfigured;
+
+    if (!sunatIsConfigured) {
+        say($('sunatStatus'), 'Configura APPWRITE_SUNAT_TABLE_ID en la Function de administración para guardar obligaciones y pagos.');
+    }
+
+    const pending = records.filter(record => record.status === 'pending');
+    const paid = records.filter(record => record.status === 'paid');
+    const pendingTotal = pending.reduce((total, record) => total + Number(record.amount || 0), 0);
+
+    if (sunatIsConfigured) {
+        say(
+            $('sunatStatus'),
+            `${pending.length} obligación(es) pendiente(s) · ${money(pendingTotal)} por pagar · ${paid.length} pago(s) registrados.`
+        );
+    }
+
+    $('sunatLedger').innerHTML = records.length
+        ? records.map(record => `
+            <tr>
+                <td>${escapeHtml(record.tax_type)}</td>
+                <td>${escapeHtml(record.tax_period)}</td>
+                <td>${escapeHtml(record.due_date)}</td>
+                <td>${record.status === 'paid' ? 'Pagado' : 'Pendiente'}</td>
+                <td>${money(record.amount)}</td>
+                <td>${escapeHtml([record.payment_method, record.payment_reference].filter(Boolean).join(' · ') || '—')}</td>
+                <td>
+                    <div class="finance-pending-actions">
+                        ${record.status === 'pending'
+                            ? `<button class="finance-review" type="button" data-sunat-pay="${escapeHtml(record.id)}">Registrar pago</button>`
+                            : ''}
+                        <button class="finance-delete" type="button" data-sunat-edit="${escapeHtml(record.id)}">Editar</button>
+                        <button class="finance-delete" type="button" data-sunat-delete="${escapeHtml(record.id)}">Eliminar</button>
+                    </div>
+                </td>
+            </tr>`).join('')
+        : '<tr><td colspan="7">Aún no hay registros SUNAT.</td></tr>';
 }
 
     const tokens = name => new Set(normalize(name).split(/[^a-z0-9]+/).filter(word => word.length > 1 && !['de', 'en', 'el', 'la', 'y'].includes(word)));
@@ -736,50 +819,91 @@ function similarity(a, b) {
     return sameImage ? 1 : shared / union;
 }
 
-function productStats() {
+function productStats(sourceEvents = events, sourceEntries = entries) {
     const stats = new Map();
 
     const row = (id, name) => {
         const key = id || `n:${normalize(name)}`;
 
-        if (!stats.has(key)) stats.set(key, { id, name: productById(id)?.name || name || 'Sin nombre', cart: 0, whatsapp: 0, units: 0, revenue: 0 });
+        if (!stats.has(key)) {
+            stats.set(key, {
+                id,
+                name: productById(id)?.name || name || 'Sin nombre',
+                views: 0,
+                cart: 0,
+                whatsapp: 0,
+                units: 0,
+                revenue: 0,
+                grossProfit: 0
+            });
+        }
 
         return stats.get(key);
     };
 
-    events.forEach(item => {
+    sourceEvents.forEach(item => {
+        if (!['product_view', 'add_to_cart', 'whatsapp_click'].includes(item.event_type)) return;
         const target = row(item.product_id, item.product_name);
 
-        if (item.event_type === 'add_to_cart') target.cart += item.quantity;
-        if (item.event_type === 'whatsapp_click') target.whatsapp += item.quantity;
+        if (item.event_type === 'product_view') target.views += Number(item.quantity || 0);
+        if (item.event_type === 'add_to_cart') target.cart += Number(item.quantity || 0);
+        if (item.event_type === 'whatsapp_click') target.whatsapp += Number(item.quantity || 0);
     });
 
-    entries.filter(item => item.kind === 'sale').forEach(sale => {
+    sourceEntries.filter(item => item.kind === 'sale').forEach(sale => {
         const target = row(sale.product_id, sale.product_name || sale.description);
+        const unitCost = Number(productById(sale.product_id)?.cost_price || 0);
+        const quantity = Number(sale.quantity || 0);
 
-        target.units += sale.quantity;
-        target.revenue += sale.amount;
+        target.units += quantity;
+        target.revenue += Number(sale.amount || 0);
+        target.grossProfit += Number(sale.amount || 0) - unitCost * quantity;
     });
 
     return stats;
 }
 
 function renderFinance() {
-    const sales = entries.filter(item => item.kind === 'sale');
-    const expenses = entries.filter(item => item.kind === 'expense');
-    const income = sales.reduce((sum, item) => sum + item.amount, 0);
-    const costs = expenses.reduce((sum, item) => sum + item.amount, 0);
+    const range = $('financeRange').value;
+    const periodEntries = entries.filter(item => isInRange(item.created_at, range));
+    const periodEvents = events.filter(item => isInRange(item.created_at, range));
+    const periodTaxes = sunatRecords.filter(record =>
+        record.status === 'paid' && isInRange(record.paid_at, range)
+    );
+    const sales = periodEntries.filter(item => item.kind === 'sale');
+    const expenses = periodEntries.filter(item => item.kind === 'expense');
+    const income = sales.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const costs = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const taxesPaid = periodTaxes.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const pendingTaxes = sunatRecords.filter(item => item.status === 'pending');
+    const pendingTaxAmount = pendingTaxes.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const costOfGoods = sales.reduce((sum, sale) =>
+        sum + Number(productById(sale.product_id)?.cost_price || 0) * Number(sale.quantity || 0), 0);
+    const averageSale = sales.length ? income / sales.length : 0;
+    const grossMargin = income ? ((income - costOfGoods) / income) * 100 : 0;
     const linked = new Set(sales.map(item => item.analytics_event_id).filter(Boolean));
-    const pending = events.filter(item => item.event_type === 'whatsapp_click' && !item.dismissed && !linked.has(item.id));
+    const pending = periodEvents.filter(item => item.event_type === 'whatsapp_click' && !item.dismissed && !linked.has(item.id));
 
     $('financeTotals').innerHTML =
         card('Ventas confirmadas', money(income)) +
-        card('Costos y gastos', money(costs)) +
-        card('Ganancia estimada', money(income - costs)) +
-        card('Unidades vendidas', String(sales.reduce((sum, item) => sum + item.quantity, 0))) +
+        card('Gastos operativos', money(costs)) +
+        card('SUNAT por pagar', money(pendingTaxAmount)) +
+        card('SUNAT pagado en periodo', money(taxesPaid)) +
+        card('Flujo neto registrado', money(income - costs - taxesPaid)) +
+        card('Ticket promedio', money(averageSale)) +
+        card('Margen bruto estimado', `${grossMargin.toFixed(1)}%`) +
+        card('Unidades vendidas', String(sales.reduce((sum, item) => sum + Number(item.quantity || 0), 0))) +
         card('Pedidos por confirmar', String(pending.length));
 
     say($('financePendingStatus'), pending.length ? `${pending.length} pedidos de WhatsApp sin confirmar.` : 'No hay pedidos pendientes.');
+    const rangeLabel = range === 'all' ? 'todo el historial' : `últimos ${range} días`;
+    const warnings = [];
+    if (!ANALYTICS_FUNCTION) warnings.push('Falta configurar la Function pública de Analytics.');
+    else if (!analyticsIsConfigured) warnings.push('Falta APPWRITE_ANALYTICS_TABLE_ID en la Function de administración.');
+    if (!financeIsConfigured) warnings.push('Falta APPWRITE_FINANCE_TABLE_ID.');
+    if (!sunatIsConfigured) warnings.push('Falta APPWRITE_SUNAT_TABLE_ID.');
+    $('financeConnectionStatus').textContent =
+        warnings.length ? warnings.join(' ') : `Datos del periodo: ${rangeLabel}.`;
 
     $('financePendingWhatsapp').innerHTML = pending.map(item => `
     <tr>
@@ -795,41 +919,85 @@ function renderFinance() {
     const perDay = new Map();
 
     sales.forEach(item => {
-        const day = new Date(item.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
-
-        perDay.set(day, (perDay.get(day) || 0) + item.amount);
+        const date = new Date(item.created_at);
+        const key = range === 'all'
+            ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+            : localDateValue(date);
+        const label = range === 'all'
+            ? date.toLocaleDateString('es-PE', { month: 'short', year: '2-digit' })
+            : date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
+        const current = perDay.get(key) || { label, value: 0 };
+        current.value += Number(item.amount || 0);
+        perDay.set(key, current);
     });
 
-    const days = [...perDay.entries()].reverse().slice(-30);
+    const days = [...perDay.values()].slice(-30);
 
-    $('financeTrendChart').innerHTML = barsSvg(days.map(([, value]) => Math.round(value)), days.map(([label]) => label));
+    $('financeTrendChart').innerHTML = barsSvg(
+        days.map(item => Math.round(item.value)),
+        days.map(item => item.label)
+    );
 
     const perSupplier = new Map();
+    const perCategory = new Map();
 
     expenses.forEach(item => {
         const label = `${item.supplier || 'Sin proveedor'} · ${COST_LABELS[item.category] || item.category}`;
+        const amount = Number(item.amount || 0);
+        const category = COST_LABELS[item.category] || item.category || 'Otros';
+        perSupplier.set(label, (perSupplier.get(label) || 0) + amount);
+        perCategory.set(category, (perCategory.get(category) || 0) + amount);
+    });
 
-        perSupplier.set(label, (perSupplier.get(label) || 0) + item.amount);
+    periodTaxes.forEach(item => {
+        const amount = Number(item.amount || 0);
+        perSupplier.set('SUNAT · Impuestos', (perSupplier.get('SUNAT · Impuestos') || 0) + amount);
+        perCategory.set('SUNAT', (perCategory.get('SUNAT') || 0) + amount);
     });
 
     $('financeSupplierChart').innerHTML = horizontalBars(
         [...perSupplier.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([label, value]) => ({ label, value, text: money(value) }))
     );
 
-    const stats = [...productStats().values()].sort((a, b) => b.revenue - a.revenue || b.cart - a.cart);
+    $('financeExpensePie').innerHTML = pieChart(
+        [...perCategory.entries()].map(([label, value], index) => ({
+            label,
+            value,
+            text: money(value),
+            color: ['#8f5369', '#c47f94', '#d99eaf', '#4c8f69', '#e7bd77', '#8667a8'][index % 6]
+        }))
+    );
+
+    $('financeProductCosts').innerHTML = products.map(product => {
+        const price = Number(product.price || 0);
+        const unitCost = Number(product.cost_price || 0);
+        const margin = price ? ((price - unitCost) / price) * 100 : 0;
+
+        return `<tr>
+            <td>${escapeHtml(product.name)}</td>
+            <td>${escapeHtml(product.supplier || '—')}</td>
+            <td>${money(price)}</td>
+            <td>${money(unitCost)}</td>
+            <td>${money(price - unitCost)} · ${margin.toFixed(1)}%</td>
+            <td><button class="finance-review" type="button" data-cost-edit="${escapeHtml(product.id)}">Editar</button></td>
+        </tr>`;
+    }).join('');
+
+    const statsMap = productStats(periodEvents, periodEntries);
+    const stats = [...statsMap.values()].sort((a, b) => b.revenue - a.revenue || b.cart - a.cart);
 
     say($('financeProductPerformanceStatus'), stats.length ? `${stats.length} productos con actividad.` : 'Aún no hay actividad.');
     $('financeProductPerformance').innerHTML = stats.map(item => `
-        <tr><td>${escapeHtml(item.name)}</td><td>${item.cart}</td><td>${item.whatsapp}</td><td>${item.units}</td><td>${money(item.revenue)}</td></tr>`).join('');
+        <tr><td>${escapeHtml(item.name)}</td><td>${item.views}</td><td>${item.cart}</td><td>${item.whatsapp}</td><td>${item.units}</td><td>${money(item.revenue)}</td><td>${money(item.grossProfit)}</td></tr>`).join('');
 
-    renderSimilarProducts();
+    renderSimilarProducts(statsMap);
 
     $('financeSalesLedger').innerHTML = sales.map(item => `
     <tr>
         <td>${escapeHtml(formatDate(item.created_at))}</td>
         <td>${escapeHtml(item.product_name || item.description || 'Venta general')}</td>
-        <td>${item.quantity}</td><td>${money(item.unit_price)}</td><td>${money(item.amount)}</td>
-        <td><button class="finance-delete" type="button" data-finance-delete="${escapeHtml(item.id)}">Eliminar</button></td>
+        <td>${item.quantity}</td><td>${escapeHtml(({ yape: 'Yape', efectivo: 'Efectivo', transferencia: 'Transferencia', otro: 'Otro' })[item.category] || item.category || '—')}</td><td>${money(item.unit_price)}</td><td>${money(item.amount)}</td>
+        <td><div class="finance-pending-actions"><button class="finance-review" type="button" data-finance-edit="${escapeHtml(item.id)}">Editar</button><button class="finance-delete" type="button" data-finance-delete="${escapeHtml(item.id)}">Eliminar</button></div></td>
     </tr>`).join('');
 
     $('financeExpenseLedger').innerHTML = expenses.map(item => `
@@ -840,12 +1008,13 @@ function renderFinance() {
         <td>${escapeHtml(item.supplier || '—')}</td>
         <td>${escapeHtml(item.description)}</td>
         <td>${money(item.amount)}</td>
-        <td><button class="finance-delete" type="button" data-finance-delete="${escapeHtml(item.id)}">Eliminar</button></td>
+        <td><div class="finance-pending-actions"><button class="finance-review" type="button" data-finance-edit="${escapeHtml(item.id)}">Editar</button><button class="finance-delete" type="button" data-finance-delete="${escapeHtml(item.id)}">Eliminar</button></div></td>
     </tr>`).join('');
+
+    renderSunat();
 }
 
-function renderSimilarProducts() {
-    const stats = productStats();
+function renderSimilarProducts(stats = productStats()) {
     const matches = new Map();
 
     for (let i = 0; i < products.length; i++) {
@@ -885,12 +1054,20 @@ async function loadFinance() {
     say($('financeStatus'), 'Cargando finanzas…');
 
     try {
-        const [finance, activity] = await Promise.all([call('finance.list'), call('analytics.list')]);
+        const [finance, activity, sunat] = await Promise.all([
+            call('finance.list'),
+            call('analytics.list'),
+            call('sunat.list')
+        ]);
 
-        entries = finance.entries;
-        events = activity.events;
+        entries = Array.isArray(finance.entries) ? finance.entries : [];
+        events = Array.isArray(activity.events) ? activity.events : [];
+        sunatRecords = Array.isArray(sunat.records) ? sunat.records : [];
+        financeIsConfigured = finance.configured !== false;
+        sunatIsConfigured = sunat.configured !== false;
+        analyticsIsConfigured = activity.configured !== false;
         renderFinance();
-        say($('financeStatus'), 'Ventas, compras y gastos se guardan de forma segura en la nube.');
+        say($('financeStatus'), 'Datos actualizados desde Appwrite. Los pagos de Yape y SUNAT se confirman manualmente.');
     } catch (error) {
         say($('financeStatus'), error.message, true);
     }
@@ -902,6 +1079,7 @@ async function loadFinance() {
     try {
         await call('finance.save', {
         entry: {
+            id: read('id') || undefined,
             kind,
             created_at: new Date(read('created_at')).toISOString(),
             description: read('description'),
@@ -923,9 +1101,79 @@ async function loadFinance() {
     }
     }
 
+    function fillFinanceForm(record) {
+    const form = record.kind === 'sale' ? financeSaleForm : financeExpenseForm;
+    const read = name => field(form, name);
+
+    read('id').value = record.id || '';
+    read('created_at').value = toLocalInput(new Date(record.created_at));
+    read('description').value = record.description || '';
+    read('product_id').value = record.product_id || '';
+    read('product_name').value = record.product_name || '';
+    read('category').value = record.category || (record.kind === 'sale' ? 'yape' : 'otros');
+    if (read('supplier')) read('supplier').value = record.supplier || '';
+    read('quantity').value = Number(record.quantity || 1);
+    read('unit_price').value = Number(record.unit_price || 0);
+    read('amount').value = Number(record.amount || 0);
+
+    if (record.kind === 'sale') {
+        read('analytics_event_id').value = record.analytics_event_id || '';
+    } else {
+        updateExpenseFields();
+    }
+
+    form.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    say($('financeStatus'), `Editando ${record.kind === 'sale' ? 'venta' : 'gasto'} existente.`);
+    }
+
+    function fillSunatForm(record, { markPaid = false } = {}) {
+    field(sunatForm, 'id').value = record.id || '';
+    field(sunatForm, 'tax_type').value = record.tax_type || 'IGV';
+    field(sunatForm, 'tax_period').value = record.tax_period || localDateValue().slice(0, 7);
+    field(sunatForm, 'due_date').value = record.due_date || localDateValue();
+    field(sunatForm, 'amount').value = Number(record.amount || 0);
+    field(sunatForm, 'status').value = markPaid ? 'paid' : (record.status || 'pending');
+    field(sunatForm, 'paid_at').value = record.paid_at || localDateValue();
+    field(sunatForm, 'payment_method').value = record.payment_method || '';
+    field(sunatForm, 'payment_reference').value = record.payment_reference || '';
+    field(sunatForm, 'notes').value = record.notes || '';
+    updateSunatPaymentFields();
+    $('sunatForm').scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }
+
+    sunatForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const read = name => field(sunatForm, name).value;
+
+    try {
+        await call('sunat.save', {
+            entry: {
+                id: read('id') || undefined,
+                tax_type: read('tax_type'),
+                tax_period: read('tax_period'),
+                due_date: read('due_date'),
+                amount: Number(read('amount')),
+                status: read('status'),
+                paid_at: read('paid_at'),
+                payment_method: read('payment_method'),
+                payment_reference: read('payment_reference'),
+                notes: read('notes')
+            }
+        });
+
+        say($('financeStatus'), 'Registro SUNAT guardado.');
+        resetSunatForm();
+        await loadFinance();
+    } catch (error) {
+        say($('financeStatus'), error.message, true);
+    }
+    });
+
+    field(sunatForm, 'status').addEventListener('change', updateSunatPaymentFields);
+
     financeSaleForm.addEventListener('submit', event => {
     event.preventDefault();
-    syncFinanceSaleFields();
+    if (!field(financeSaleForm, 'id').value) syncFinanceSaleFields();
     saveEntry(financeSaleForm, 'sale', $('financeStatus'));
     });
 
@@ -938,6 +1186,7 @@ async function loadFinance() {
     field(financeSaleForm, 'quantity').addEventListener('input', () => syncFinanceSaleFields());
     field(financeSaleForm, 'unit_price').addEventListener('input', () => syncFinanceSaleFields());
     field(financeExpenseForm, 'category').addEventListener('change', updateExpenseFields);
+    $('financeRange').addEventListener('change', renderFinance);
 
     financeExpenseProduct.addEventListener('change', () => {
     const product = productById(financeExpenseProduct.value);
@@ -957,9 +1206,27 @@ async function loadFinance() {
     const sale = event.target.closest('[data-pending-sale]');
     const dismiss = event.target.closest('[data-pending-dismiss]');
     const remove = event.target.closest('[data-finance-delete]');
+    const financeEdit = event.target.closest('[data-finance-edit]');
+    const costEdit = event.target.closest('[data-cost-edit]');
+    const sunatPay = event.target.closest('[data-sunat-pay]');
+    const sunatEdit = event.target.closest('[data-sunat-edit]');
+    const sunatDelete = event.target.closest('[data-sunat-delete]');
 
     try {
-        if (sale) {
+        if (costEdit) {
+        const product = productById(costEdit.dataset.costEdit);
+        if (!product) return;
+        $('adminFinance').close();
+        fillProductForm(product);
+        } else if (sunatPay || sunatEdit) {
+        const id = (sunatPay || sunatEdit).dataset.sunatPay || (sunatPay || sunatEdit).dataset.sunatEdit;
+        const record = sunatRecords.find(item => String(item.id) === String(id));
+        if (record) fillSunatForm(record, { markPaid: Boolean(sunatPay) });
+        } else if (sunatDelete) {
+        if (!window.confirm('¿Eliminar este registro SUNAT?')) return;
+        await call('sunat.delete', { id: sunatDelete.dataset.sunatDelete });
+        await loadFinance();
+        } else if (sale) {
         const item = events.find(candidate => candidate.id === sale.dataset.pendingSale);
 
         if (!item) return;
@@ -973,6 +1240,9 @@ async function loadFinance() {
         } else if (dismiss) {
         await call('analytics.dismiss', { id: dismiss.dataset.pendingDismiss });
         await loadFinance();
+        } else if (financeEdit) {
+        const record = entries.find(item => String(item.id) === String(financeEdit.dataset.financeEdit));
+        if (record) fillFinanceForm(record);
         } else if (remove) {
         if (!window.confirm('¿Eliminar este movimiento?')) return;
 
@@ -997,21 +1267,34 @@ async function loadFinance() {
   // ==========================================
 
     function renderAnalytics() {
-    const carts = events.filter(item => item.event_type === 'add_to_cart');
-    const clicks = events.filter(item => item.event_type === 'whatsapp_click');
-    const sumQuantity = list => list.reduce((sum, item) => sum + item.quantity, 0);
+    const range = $('analyticsRange').value;
+    const filteredEvents = events.filter(item => isInRange(item.created_at, range));
+    const catalogViews = filteredEvents.filter(item => item.event_type === 'catalog_view');
+    const views = filteredEvents.filter(item => item.event_type === 'product_view');
+    const carts = filteredEvents.filter(item => item.event_type === 'add_to_cart');
+    const clicks = filteredEvents.filter(item => item.event_type === 'whatsapp_click');
+    const sumQuantity = list => list.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const perProduct = new Map();
 
-    carts.forEach(item => {
+    [...views, ...carts].forEach(item => {
+        if (!item.product_id && !item.product_name) return;
         const key = item.product_id || item.product_name;
-        const current = perProduct.get(key) || { name: productById(item.product_id)?.name || item.product_name, image: productById(item.product_id)?.image_path, count: 0 };
+        const current = perProduct.get(key) || {
+            name: productById(item.product_id)?.name || item.product_name,
+            image: productById(item.product_id)?.image_path,
+            count: 0,
+            views: 0
+        };
 
-        current.count += item.quantity;
+        if (item.event_type === 'product_view') current.views += Number(item.quantity || 0);
+        current.count += Number(item.quantity || 0);
         perProduct.set(key, current);
     });
 
     $('analyticsCards').innerHTML =
-        card('Interacciones', String(events.length)) +
+        card('Interacciones', String(filteredEvents.length)) +
+        card('Visitas al catálogo', String(catalogViews.length)) +
+        card('Vistas de productos', String(sumQuantity(views))) +
         card('Agregados al carrito', String(sumQuantity(carts))) +
         card('Clics en WhatsApp', String(clicks.length)) +
         card('Productos distintos', String(perProduct.size));
@@ -1020,13 +1303,13 @@ async function loadFinance() {
     const topImage = top ? imageUrl(top.image) : '';
 
     $('topProduct').innerHTML = top
-        ? `<div class="similar-product-cell">${topImage ? `<img src="${escapeHtml(topImage)}" alt="">` : ''}<strong>${escapeHtml(top.name)}</strong> · ${top.count} veces</div>`
+        ? `<div class="similar-product-cell">${topImage ? `<img src="${escapeHtml(topImage)}" alt="">` : ''}<strong>${escapeHtml(top.name)}</strong> · ${top.views} vistas y ${top.count} interacciones</div>`
         : 'Aún no hay productos agregados.';
 
     const perHour = list => {
         const hours = Array(24).fill(0);
 
-        list.forEach(item => (hours[new Date(item.created_at).getHours()] += item.quantity));
+        list.forEach(item => (hours[new Date(item.created_at).getHours()] += Number(item.quantity || 0)));
 
         return hours;
     };
@@ -1036,21 +1319,30 @@ async function loadFinance() {
     $('cartHourChart').innerHTML = barsSvg(perHour(carts), labels);
     $('whatsappHourChart').innerHTML = barsSvg(perHour(clicks), labels, '#4c8f69');
     $('interactionChart').innerHTML = pieChart([
-        { label: 'Agregar al carrito', value: carts.length, color: '#8f5369' },
+        { label: 'Visitas al catálogo', value: catalogViews.length, color: '#d99eaf' },
+        { label: 'Vistas de productos', value: sumQuantity(views), color: '#8f5369' },
+        { label: 'Agregar al carrito', value: sumQuantity(carts), color: '#c47f94' },
         { label: 'Pedir por WhatsApp', value: clicks.length, color: '#4c8f69' }
     ]);
 
-    const recent = events.slice(0, 100);
+    const recent = filteredEvents.slice(0, 100);
 
-    say($('analyticsHistorySummary'), `Últimos ${recent.length} de ${events.length} registros.`);
+    say($('analyticsHistorySummary'), `Mostrando ${recent.length} de ${filteredEvents.length} registros en este periodo.`);
     $('analyticsHistory').innerHTML = recent.map(item => `
         <tr>
         <td>${escapeHtml(formatDate(item.created_at))}</td>
-        <td>${item.event_type === 'whatsapp_click' ? 'Clic en WhatsApp' : 'Agregó al carrito'}</td>
+        <td>${({
+            catalog_view: 'Visita al catálogo',
+            product_view: 'Vio un producto',
+            add_to_cart: 'Agregó al carrito',
+            whatsapp_click: 'Clic/pedido por WhatsApp'
+        })[item.event_type] || 'Interacción'}</td>
         <td>${escapeHtml(item.product_name || '—')}</td>
         <td>${item.quantity}</td>
         </tr>`).join('');
     }
+
+    $('analyticsRange').addEventListener('change', renderAnalytics);
 
     $('openAnalytics').addEventListener('click', async () => {
     $('adminAnalytics').showModal();
@@ -1058,10 +1350,16 @@ async function loadFinance() {
     $('analyticsContent').hidden = true;
 
     try {
-        events = (await call('analytics.list')).events;
+        const result = await call('analytics.list');
+        events = Array.isArray(result.events) ? result.events : [];
+        analyticsIsConfigured = result.configured !== false;
         renderAnalytics();
         $('analyticsContent').hidden = false;
-        say($('analyticsStatus'), 'Actividad de la tienda.');
+        say($('analyticsStatus'), !ANALYTICS_FUNCTION
+            ? 'Configura appwriteAnalyticsFunctionId para conectar los eventos del sitio público.'
+            : !analyticsIsConfigured
+                ? 'Configura APPWRITE_ANALYTICS_TABLE_ID en la Function de administración.'
+                : 'Actividad pública registrada sin datos personales.');
     } catch (error) {
         say($('analyticsStatus'), error.message, true);
     }

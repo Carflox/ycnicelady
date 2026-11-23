@@ -42,7 +42,7 @@
   <title>Administrar productos | YC NICE LADY</title>
 
   <link rel="icon" type="image/png" href="img/logo-transparent.png?v=20261114-1">
-  <link rel="stylesheet" href="css/admin.css?v=finance-supplier-20261115-1">
+  <link rel="stylesheet" href="css/admin.css?v=finance-dashboard-20261122-1">
 </head>
 
 <body>
@@ -478,6 +478,18 @@
       <div class="finance-content">
 
         <div class="analytics-cards" id="financeTotals"></div>
+        <div class="chart-controls finance-period">
+          <label>
+            Periodo de análisis
+            <select id="financeRange">
+              <option value="7">Últimos 7 días</option>
+              <option value="30" selected>Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="all">Todo el historial</option>
+            </select>
+          </label>
+          <output id="financeConnectionStatus" aria-live="polite"></output>
+        </div>
 
         <!-- PEDIDOS PENDIENTES -->
         <section
@@ -521,6 +533,7 @@
 
             <h3>Registrar venta confirmada</h3>
 
+            <input name="id" type="hidden">
             <input name="analytics_event_id" type="hidden">
             <input name="product_name" type="hidden">
 
@@ -533,6 +546,16 @@
               Producto vendido
               <select name="product_id" id="financeSaleProduct">
                 <option value="">Venta general</option>
+              </select>
+            </label>
+
+            <label>
+              Medio de pago confirmado
+              <select name="category" required>
+                <option value="yape" selected>Yape (verificado manualmente)</option>
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="otro">Otro</option>
               </select>
             </label>
 
@@ -603,6 +626,7 @@
           <!-- REGISTRAR GASTOS -->
           <form id="financeExpenseForm" class="finance-form">
 
+            <input name="id" type="hidden">
             <input name="product_name" type="hidden">
 
             <h3>Registrar costo o gasto</h3>
@@ -681,6 +705,77 @@
 
           </form>
 
+          <!-- REGISTRAR OBLIGACIONES Y PAGOS SUNAT -->
+          <form id="sunatForm" class="finance-form">
+            <h3>Obligación o pago SUNAT</h3>
+            <input name="id" type="hidden">
+
+            <label>
+              Tributo
+              <select name="tax_type" required>
+                <option value="IGV">IGV</option>
+                <option value="Renta">Impuesto a la renta</option>
+                <option value="NRUS">Nuevo RUS</option>
+                <option value="Otro">Otro (según tu régimen)</option>
+              </select>
+            </label>
+
+            <div class="form-columns">
+              <label>
+                Periodo tributario
+                <input name="tax_period" type="month" required>
+              </label>
+              <label>
+                Vencimiento
+                <input name="due_date" type="date" required>
+              </label>
+            </div>
+
+            <label>
+              Importe (S/)
+              <input name="amount" type="number" min="0.01" step="0.01" required>
+            </label>
+
+            <label>
+              Estado
+              <select name="status" required>
+                <option value="pending" selected>Pendiente</option>
+                <option value="paid">Pagado</option>
+              </select>
+            </label>
+
+            <div class="sunat-payment-fields" id="sunatPaymentFields" hidden>
+              <label>
+                Fecha de pago
+                <input name="paid_at" type="date">
+              </label>
+              <label>
+                Medio de pago
+                <select name="payment_method">
+                  <option value="">Seleccionar</option>
+                  <option value="banco">Banco / Págalo.pe</option>
+                  <option value="yape">Yape</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </label>
+              <label>
+                N.° de constancia o referencia (opcional)
+                <input name="payment_reference" maxlength="120">
+              </label>
+            </div>
+
+            <label>
+              Nota (opcional)
+              <input name="notes" maxlength="240" placeholder="Detalle para tu control">
+            </label>
+
+            <p class="finance-note">
+              Registro manual de control; no calcula tributos ni realiza pagos en SUNAT.
+              Verifica importes y vencimientos con tu contador.
+            </p>
+            <button class="button" type="submit">Guardar registro SUNAT</button>
+          </form>
+
         </div>
 
         <!-- GRÁFICOS -->
@@ -696,7 +791,32 @@
             <div id="financeSupplierChart" class="analytics-chart"></div>
           </section>
 
+          <section>
+            <h3>Distribución de costos</h3>
+            <div id="financeExpensePie" class="analytics-chart"></div>
+          </section>
+
         </div>
+
+        <section class="analytics-history">
+          <h3>Costos actuales y proveedores del catálogo</h3>
+          <p>La utilidad estimada usa el costo actual del producto, no el costo histórico de cada lote.</p>
+          <div class="analytics-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Proveedor</th>
+                  <th>Precio</th>
+                  <th>Costo unitario</th>
+                  <th>Margen estimado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="financeProductCosts"></tbody>
+            </table>
+          </div>
+        </section>
 
         <!-- RENDIMIENTO PRODUCTOS -->
         <section class="analytics-history">
@@ -713,10 +833,12 @@
               <thead>
                 <tr>
                   <th>Producto</th>
+                  <th>Vistas</th>
                   <th>Agregado al carrito</th>
                   <th>Clics WhatsApp</th>
                   <th>Unidades vendidas</th>
                   <th>Ingresos</th>
+                  <th>Margen bruto est.</th>
                 </tr>
               </thead>
 
@@ -771,6 +893,7 @@
                   <th>Fecha y hora</th>
                   <th>Producto</th>
                   <th>Cantidad</th>
+                  <th>Pago</th>
                   <th>Precio de venta c/u</th>
                   <th>Ingreso total</th>
                   <th></th>
@@ -811,6 +934,27 @@
 
         </section>
 
+        <section class="analytics-history">
+          <h3>Obligaciones y pagos SUNAT</h3>
+          <output id="sunatStatus" aria-live="polite"></output>
+          <div class="analytics-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tributo</th>
+                  <th>Periodo</th>
+                  <th>Vencimiento</th>
+                  <th>Estado</th>
+                  <th>Importe</th>
+                  <th>Pago / constancia</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="sunatLedger"></tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
 
     </dialog>
@@ -845,9 +989,20 @@
       <div class="analytics-content" id="analyticsContent" hidden>
 
         <div class="analytics-cards" id="analyticsCards"></div>
+        <div class="chart-controls">
+          <label>
+            Periodo de análisis
+            <select id="analyticsRange">
+              <option value="7">Últimos 7 días</option>
+              <option value="30" selected>Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="all">Todo el historial</option>
+            </select>
+          </label>
+        </div>
 
         <section class="analytics-top-product">
-          <h3>Producto más agregado</h3>
+          <h3>Producto más visto o agregado</h3>
           <div id="topProduct"></div>
         </section>
 
@@ -926,7 +1081,7 @@
   <!-- La conexión debe realizarse desde admin.js hacia Appwrite -->
 
   <script src="js/config.js?v=appwrite-20261122-2"></script>
-  <script src="js/admin.js?v=admin-execution-errors-20261122-1" defer></script>
+  <script src="js/admin.js?v=finance-dashboard-20261122-1" defer></script>
 
 </body>
 </html>

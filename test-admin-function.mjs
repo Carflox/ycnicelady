@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import admin from './appwrite-functions/admin/main.js';
-Object.assign(process.env,{APPWRITE_PROJECT_ID:'test',APPWRITE_API_KEY:'test-key',APPWRITE_DATABASE_ID:'db',APPWRITE_PRODUCTS_TABLE_ID:'products',ADMIN_EMAIL:'admin@example.test',ADMIN_PASSWORD:'safe-test-pass',ADMIN_SESSION_SECRET:'a-long-test-secret'});
+Object.assign(process.env,{APPWRITE_PROJECT_ID:'test',APPWRITE_API_KEY:'test-key',APPWRITE_DATABASE_ID:'db',APPWRITE_PRODUCTS_TABLE_ID:'products',APPWRITE_FINANCE_TABLE_ID:'finance',APPWRITE_SUNAT_TABLE_ID:'sunat',ADMIN_EMAIL:'admin@example.test',ADMIN_PASSWORD:'safe-test-pass',ADMIN_SESSION_SECRET:'a-long-test-secret'});
 const rows=[{$id:'p1',name:'P1',price:10,stock:4,is_active:true,sort_order:1,kit_items:'[{"id":"kit1","name":"Lash","price":3}]'}];
 const oldFetch=globalThis.fetch;const calls=[];
 globalThis.fetch=async(url,opts)=>{calls.push({url,opts});let data;if(url.includes('/rows?'))data={rows};else if(url.endsWith('/rows'))data={$id:'new'};else data={};return {ok:true,status:200,json:async()=>data};};
@@ -10,4 +10,12 @@ const list=await run({action:'products.list',token:login.result.token});assert.e
 const unauth=await run({action:'products.list',token:'invalid'});assert.equal(unauth.status,401);
 const badLogin=await run({action:'login',email:'admin@example.test',password:'wrong'});assert.equal(badLogin.status,401);
 const session=await run({action:'session',token:login.result.token});assert.equal(session.status,200);
-globalThis.fetch=oldFetch;console.log('PASS: login, token firmado, sesión, protección 401 y lectura de catálogo.');
+const financeUpdate=await run({action:'finance.save',token:login.result.token,entry:{id:'sale-1',kind:'sale',created_at:'2026-11-22T12:00:00.000Z',description:'Venta',category:'yape',quantity:1,unit_price:25,amount:25}});assert.equal(financeUpdate.status,200);assert.equal(calls[calls.length-1].opts.method,'PUT');assert.ok(calls[calls.length-1].url.endsWith('/tables/finance/rows/sale-1'));
+const sunatSave=await run({action:'sunat.save',token:login.result.token,entry:{tax_type:'IGV',tax_period:'2026-10',due_date:'2026-11-20',amount:125.5,status:'pending'}});assert.equal(sunatSave.status,200);assert.equal(sunatSave.result.success,true);
+const invalidSunat=await run({action:'sunat.save',token:login.result.token,entry:{tax_type:'IGV',tax_period:'2026-13',due_date:'2026-11-20',amount:125.5,status:'pending'}});assert.equal(invalidSunat.status,400);
+const invalidSunatDate=await run({action:'sunat.save',token:login.result.token,entry:{tax_type:'IGV',tax_period:'2026-10',due_date:'2026-02-30',amount:125.5,status:'pending'}});assert.equal(invalidSunatDate.status,400);
+const invalidPayment=await run({action:'sunat.save',token:login.result.token,entry:{tax_type:'IGV',tax_period:'2026-10',due_date:'2026-11-20',amount:125.5,status:'paid',payment_method:'banco'}});assert.equal(invalidPayment.status,400);
+const paidSunat=await run({action:'sunat.save',token:login.result.token,entry:{tax_type:'IGV',tax_period:'2026-10',due_date:'2026-11-20',amount:125.5,status:'paid',paid_at:'2026-11-22',payment_method:'banco'}});assert.equal(paidSunat.status,200);assert.equal(paidSunat.result.success,true);
+const sunatUpdate=await run({action:'sunat.save',token:login.result.token,entry:{id:'tax-1',tax_type:'IGV',tax_period:'2026-10',due_date:'2026-11-20',amount:125.5,status:'paid',paid_at:'2026-11-22',payment_method:'banco'}});assert.equal(sunatUpdate.status,200);assert.equal(calls[calls.length-1].opts.method,'PUT');
+const sunatDelete=await run({action:'sunat.delete',token:login.result.token,id:'tax-1'});assert.equal(sunatDelete.status,200);assert.equal(calls[calls.length-1].opts.method,'DELETE');
+globalThis.fetch=oldFetch;console.log('PASS: auth, catálogo, validación de obligaciones y pagos SUNAT.');

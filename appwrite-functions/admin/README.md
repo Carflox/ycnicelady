@@ -8,8 +8,9 @@ Create a Node.js Appwrite Function, entrypoint `main.js`, public execution allow
 - `APPWRITE_API_KEY` — server key; never in client or repository
 - `APPWRITE_DATABASE_ID`
 - `APPWRITE_PRODUCTS_TABLE_ID`
-- `APPWRITE_FINANCE_TABLE_ID` (optional until Finance feature is used)
-- `APPWRITE_ANALYTICS_TABLE_ID` (optional; analytics list/dismiss only)
+- `APPWRITE_FINANCE_TABLE_ID` (required to save finance movements)
+- `APPWRITE_ANALYTICS_TABLE_ID` (required to display public-site events)
+- `APPWRITE_SUNAT_TABLE_ID` (required for manual SUNAT tracking)
 - `APPWRITE_PRODUCTS_BUCKET_ID` (required for image uploads)
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD` — strong unique password
@@ -18,12 +19,14 @@ Create a Node.js Appwrite Function, entrypoint `main.js`, public execution allow
 ## Required TablesDB attributes
 The Products table must support the project fields: `name`, `description`, `category`, `supplier`, `price`, `cost_price`, `stock`, `is_active`, `sort_order`, `kit_items`, `image_path`. `kit_items` should be a string attribute containing JSON. Finance table should support: `kind`, `created_at`, `description`, `product_id`, `product_name`, `category`, `supplier`, `quantity`, `unit_price`, `amount`, `analytics_event_id`. Analytics table expects: `event_type`, `created_at`, `product_id`, `product_name`, `quantity`.
 
+Create a separate SUNAT table in the same TablesDB database and set `APPWRITE_SUNAT_TABLE_ID` to its ID. It needs these attributes: `tax_type` (string), `tax_period` (string), `amount` (double), `due_date` (string), `status` (string), `paid_at` (string), `payment_method` (string), `payment_reference` (string), and `notes` (string). The panel records obligations and payments entered manually; it does not calculate tax due, submit declarations, or send payments to SUNAT.
+
 The Function performs login, signed-token validation, product CRUD, visibility, reorder, finance list/save/delete and analytics list/dismiss. No server key is sent to the browser. Product-image upload uses Appwrite Storage via the server API key.
 
 ## Limits and notes
 - The session token is HMAC-signed and expires after eight hours; use `ADMIN_SESSION_SECRET` and rotate it if compromised.
 - Use HTTPS, enable Appwrite function rate limits if available, and restrict API key permissions to the required tables and bucket.
-- Finance/analytics operations fail gracefully when their table IDs are not configured; finance save/delete require the Finance table.
+- List operations report whether their tables are configured; finance and SUNAT writes require their respective tables.
 - This implementation is a backend scaffold matching the current admin.js actions. Verify table schemas and permissions in your Appwrite console before production deployment.
 
 ## Connect the website's admin panel
