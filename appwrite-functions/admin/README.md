@@ -10,7 +10,7 @@ Create a Node.js Appwrite Function, entrypoint `main.js`, public execution allow
 - `APPWRITE_PRODUCTS_TABLE_ID`
 - `APPWRITE_FINANCE_TABLE_ID` (required to save finance movements)
 - `APPWRITE_ANALYTICS_TABLE_ID` (required to display public-site events)
-- `APPWRITE_SUNAT_TABLE_ID` (required for manual SUNAT tracking)
+- `APPWRITE_SUNAT_TABLE_ID` (required for manual SUNAT tracking; current table ID: `6b03c6f0001009a7b9f0`)
 - `APPWRITE_PRODUCTS_BUCKET_ID` (required for image uploads)
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD` — strong unique password
@@ -19,7 +19,7 @@ Create a Node.js Appwrite Function, entrypoint `main.js`, public execution allow
 ## Required TablesDB attributes
 The Products table must support the project fields: `name`, `description`, `category`, `supplier`, `price`, `cost_price`, `stock`, `is_active`, `sort_order`, `kit_items`, `image_path`. `kit_items` should be a string attribute containing JSON. Finance table should support: `kind`, `created_at`, `description`, `product_id`, `product_name`, `category`, `supplier`, `quantity`, `unit_price`, `amount`, `analytics_event_id`. Analytics table expects: `event_type`, `created_at`, `product_id`, `product_name`, `quantity`.
 
-Create a separate SUNAT table in the same TablesDB database and set `APPWRITE_SUNAT_TABLE_ID` to its ID. It needs these attributes: `tax_type` (string), `tax_period` (string), `amount` (double), `due_date` (string), `status` (string), `paid_at` (string), `payment_method` (string), `payment_reference` (string), and `notes` (string). The panel records obligations and payments entered manually; it does not calculate tax due, submit declarations, or send payments to SUNAT.
+Set `APPWRITE_SUNAT_TABLE_ID=6b03c6f0001009a7b9f0` in the deployed Admin Function's environment. The table must be in the configured TablesDB database and have these attributes: `tax_type` (string), `tax_period` (string), `amount` (double), `due_date` (string), `status` (string), `paid_at` (string), `payment_method` (string), `payment_reference` (string), and `notes` (string). The panel records obligations and payments entered manually; it does not calculate tax due, submit declarations, or send payments to SUNAT.
 
 The Function performs login, signed-token validation, product CRUD, visibility, reorder, finance list/save/delete and analytics list/dismiss. No server key is sent to the browser. Product-image upload uses Appwrite Storage via the server API key.
 
