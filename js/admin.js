@@ -7,7 +7,7 @@
     const ENDPOINT = String(config.appwriteEndpoint || '').replace(/\/$/, '');
     const PROJECT = config.appwriteProjectId;
     const ADMIN_FUNCTION = config.appwriteAdminFunctionId;
-    const BUCKET = config.productsBucket;
+    const BUCKET = config.appwriteProductsBucket;
     const TOKEN_KEY = 'yc-nice-lady-admin-token';
     const KIT_CATEGORIES = ['libros', 'set', 'kits'];
 
