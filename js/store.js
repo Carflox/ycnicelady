@@ -387,18 +387,13 @@ function renderProducts() {
       ? product.kit_items.filter(item => item?.name)
       : [];
 
-    const hasKitPanel =
-      kitItems.length > 0 ||
-      ['libros', 'set'].includes(categoryFor(product));
-
     if (!kitSelections.has(product.id)) {
       kitSelections.set(product.id, new Map());
     }
 
     const selected = kitSelections.get(product.id);
 
-    const kitItemsMarkup = kitItems.length > 0
-      ? kitItems.map(item => {
+    const kitItemsMarkup = kitItems.map(item => {
           const accessory =
             products.find(candidate =>
               String(candidate.id) === String(item.accessory_product_id)
@@ -438,10 +433,9 @@ function renderProducts() {
               ${quantity <= 0 ? 'disabled' : ''}
             >Quitar</button>
           </div>`;
-        }).join('')
-      : '<p class="kit-empty">Complementos disponibles próximamente.</p>';
+        }).join('');
 
-    const kitMarkup = hasKitPanel
+    const kitMarkup = kitItems.length > 0
       ? `<section class="kit-panel" aria-label="Complementos para ${escapeHtml(product.name)}">
           <h4>Kit</h4>
           ${kitItemsMarkup}

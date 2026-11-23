@@ -150,8 +150,18 @@ async function api(action, data = {}, { timeoutMs = 30000 } = {}) {
         }
 
         if (String(execution?.status).toLowerCase() !== 'completed') {
-        throw new Error(execution?.errors || 'La Function de administración no terminó correctamente.');
-    }
+            const details = String(execution?.errors || '').trim();
+            const executionId = execution?.$id
+                ? ` ID de ejecución: ${execution.$id}.`
+                : '';
+            const status = execution?.status || 'desconocido';
+
+            throw new Error(
+                details ||
+                `La Function de administración terminó con estado "${status}".${executionId} ` +
+                'Revisa sus logs en Appwrite Console → Functions → Executions.'
+            );
+        }
 
     let body = execution.responseBody;
 
