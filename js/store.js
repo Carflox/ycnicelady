@@ -84,7 +84,7 @@ function formatMoney(value) {
 function imageUrl(path) {
   if (!path || !APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !PRODUCTS_BUCKET) return '';
 
-  const fileId = String(path).trim().split('/').findLast(Boolean);
+  const fileId = String(path).trim().split('/').filter(Boolean).pop();
 
   if (!fileId) return '';
 
@@ -92,6 +92,27 @@ function imageUrl(path) {
 
   return `${APPWRITE_ENDPOINT.replace(/\/$/, '')}/storage/buckets/${encodeURIComponent(PRODUCTS_BUCKET)}/files/${encodeURIComponent(fileId)}/view?${query}`;
 }
+
+function retryProductImage(event) {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement)) return;
+
+  if (image.dataset.retryAttempted) {
+    const placeholder = document.createElement('span');
+    placeholder.className = 'product-placeholder';
+    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.textContent = '♡';
+    image.replaceWith(placeholder);
+    return;
+  }
+
+  image.dataset.retryAttempted = 'true';
+  const retryUrl = new URL(image.src);
+  retryUrl.searchParams.set('retry', String(Date.now()));
+  image.src = retryUrl.href;
+}
+
+grid?.addEventListener('error', retryProductImage, true);
 
 async function executeAppwriteFunction(functionId, data = {}, { timeoutMs = 15000 } = {}) {
   if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !functionId) {

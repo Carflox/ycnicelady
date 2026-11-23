@@ -1,6 +1,6 @@
-const VERSION = 'finance-sync-20261123-1';
-const SHELL_CACHE = 'yc-nice-lady-shell-v20-finance-sync';
-const IMAGE_CACHE = 'yc-nice-lady-images-v2';
+const VERSION = 'product-image-retry-20261123-1';
+const SHELL_CACHE = 'yc-nice-lady-shell-v21-product-image-retry';
+const IMAGE_CACHE = 'yc-nice-lady-images-v3';
 const IMAGE_CACHE_LIMIT = 120;
 
 // Debe coincidir con las rutas y versiones de index.html.
