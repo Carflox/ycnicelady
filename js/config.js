@@ -6,7 +6,7 @@ window.YCNiceLadyConfig = {
     appwriteDatabaseId: '6afc0156001d3dd77b2e',
     appwriteAdminFunctionId: '6b03495c002d9d0a9fdb',
     appwriteProductsTableId: '6afc017900116468e591',
-    appwriteAnalyticsFunctionId: '',
+    appwriteAnalyticsFunctionId: '6afd0150001b6519c0cb',
     appwriteProductsBucket: '6afc6a210013e1e1daad',
     whatsappNumber: '51930197471'
 };

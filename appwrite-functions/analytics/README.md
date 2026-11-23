@@ -1,5 +1,7 @@
 # YC NICE LADY — Analytics Function
 
-Public execution endpoint, with the function server key stored only in environment variables. Required variables: `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`, `APPWRITE_API_KEY`, `APPWRITE_DATABASE_ID`, `APPWRITE_ANALYTICS_TABLE_ID`. Supports `catalog_view`, `product_view`, `add_to_cart`, and `whatsapp_click`; it clamps quantities, truncates user-controlled strings, and creates a row with a server timestamp. It does not collect customer names, phone numbers, or payment credentials.
+This is an optional standalone collector. The current website sends events through the existing public Catalog/Orders Function instead, so a separate Analytics Function is not needed unless you choose to deploy one.
 
-Configure the analytics table attributes: `event_type` (string), `created_at` (datetime/string), `product_id` (string), `product_name` (string), `quantity` (integer). Deploy this Function, set its Function ID as `appwriteAnalyticsFunctionId` in `js/config.js`, and set the same table ID as `APPWRITE_ANALYTICS_TABLE_ID` in the Admin Function.
+For the current shared setup, deploy the updated `appwrite-functions/catalog` code and configure `APPWRITE_ANALYTICS_TABLE_ID` on both Catalog and Admin Functions. The table attributes are `event_type` (string), `created_at` (datetime/string), `product_id` (string), `product_name` (string), and `quantity` (integer). The collector supports only catalog/product views, cart additions, and WhatsApp order events; it does not collect names, phone numbers, or payment credentials.
+
+To use this standalone function instead, deploy it with the five environment variables above and point `appwriteAnalyticsFunctionId` in `js/config.js` to its Function ID.

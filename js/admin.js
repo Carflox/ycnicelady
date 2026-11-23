@@ -755,8 +755,11 @@ function resetSunatForm() {
 
 function updateExpenseFields() {
     const inventory = field(financeExpenseForm, 'category').value === 'productos';
+    const hasProduct = Boolean(financeExpenseProduct.value);
     $('financeInventoryProductWrap').hidden = !inventory;
     field(financeExpenseForm, 'supplier').required = inventory;
+    $('financeInventoryQuantityWrap').hidden = !inventory || !hasProduct;
+    field(financeExpenseForm, 'quantity').required = inventory && hasProduct;
 }
 
 function updateSunatPaymentFields() {
@@ -881,6 +884,9 @@ function renderFinance() {
         sum + Number(productById(sale.product_id)?.cost_price || 0) * Number(sale.quantity || 0), 0);
     const averageSale = sales.length ? income / sales.length : 0;
     const grossMargin = income ? ((income - costOfGoods) / income) * 100 : 0;
+    const stockUnits = products.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+    const stockValue = products.reduce((sum, product) =>
+        sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
     const linked = new Set(sales.map(item => item.analytics_event_id).filter(Boolean));
     const pending = periodEvents.filter(item => item.event_type === 'whatsapp_click' && !item.dismissed && !linked.has(item.id));
 
@@ -892,6 +898,8 @@ function renderFinance() {
         card('Flujo neto registrado', money(income - costs - taxesPaid)) +
         card('Ticket promedio', money(averageSale)) +
         card('Margen bruto estimado', `${grossMargin.toFixed(1)}%`) +
+        card('Unidades disponibles', String(stockUnits)) +
+        card('Inventario valorizado est.', money(stockValue)) +
         card('Unidades vendidas', String(sales.reduce((sum, item) => sum + Number(item.quantity || 0), 0))) +
         card('Pedidos por confirmar', String(pending.length));
 
@@ -976,6 +984,7 @@ function renderFinance() {
         return `<tr>
             <td>${escapeHtml(product.name)}</td>
             <td>${escapeHtml(product.supplier || '—')}</td>
+            <td>${Number(product.stock || 0)}</td>
             <td>${money(price)}</td>
             <td>${money(unitCost)}</td>
             <td>${money(price - unitCost)} · ${margin.toFixed(1)}%</td>
@@ -1095,6 +1104,7 @@ async function loadFinance() {
         });
 
         resetFinanceForms();
+        await loadProducts();
         await loadFinance();
     } catch (error) {
         say(messageOutput, error.message, true);
@@ -1112,7 +1122,7 @@ async function loadFinance() {
     read('product_name').value = record.product_name || '';
     read('category').value = record.category || (record.kind === 'sale' ? 'yape' : 'otros');
     if (read('supplier')) read('supplier').value = record.supplier || '';
-    read('quantity').value = Number(record.quantity || 1);
+    read('quantity').value = record.quantity > 0 ? Number(record.quantity) : '';
     read('unit_price').value = Number(record.unit_price || 0);
     read('amount').value = Number(record.amount || 0);
 
@@ -1200,6 +1210,7 @@ async function loadFinance() {
         field(financeExpenseForm, 'description').value = `Compra: ${product.name}`;
         }
     }
+    updateExpenseFields();
     });
 
     $('adminFinance').addEventListener('click', async event => {
@@ -1239,6 +1250,7 @@ async function loadFinance() {
         financeSaleForm.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
         } else if (dismiss) {
         await call('analytics.dismiss', { id: dismiss.dataset.pendingDismiss });
+        await loadProducts();
         await loadFinance();
         } else if (financeEdit) {
         const record = entries.find(item => String(item.id) === String(financeEdit.dataset.financeEdit));
@@ -1247,6 +1259,7 @@ async function loadFinance() {
         if (!window.confirm('¿Eliminar este movimiento?')) return;
 
         await call('finance.delete', { id: remove.dataset.financeDelete });
+        await loadProducts();
         await loadFinance();
         }
     } catch (error) {
@@ -1257,6 +1270,13 @@ async function loadFinance() {
     const adminPanels = [$('adminFinance'), $('adminAnalytics')];
     const panelHistoryKey = 'ycNiceLadyAdminPanel';
 
+    function syncAdminPageScroll() {
+    document.documentElement.classList.toggle(
+        'admin-panel-open',
+        adminPanels.some(dialog => dialog.open)
+    );
+    }
+
     function openAdminPanel(dialog) {
     if (dialog.open) return;
 
@@ -1266,6 +1286,7 @@ async function loadFinance() {
     state[panelHistoryKey] = dialog.id;
     history.pushState(state, '', location.href);
     dialog.showModal();
+    syncAdminPageScroll();
     }
 
     function closeAdminPanel(dialog) {
@@ -1275,6 +1296,7 @@ async function loadFinance() {
         history.back();
     } else {
         dialog.close();
+        syncAdminPageScroll();
     }
     }
 
@@ -1285,6 +1307,7 @@ async function loadFinance() {
         if (dialog.id === activeId && !dialog.open) dialog.showModal();
         else if (dialog.id !== activeId && dialog.open) dialog.close();
     });
+    syncAdminPageScroll();
     }
 
     window.addEventListener('popstate', syncAdminPanelWithHistory);

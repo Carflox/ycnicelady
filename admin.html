@@ -42,7 +42,7 @@
   <title>Administrar productos | YC NICE LADY</title>
 
   <link rel="icon" type="image/png" href="img/logo-transparent.png?v=20261114-1">
-  <link rel="stylesheet" href="css/admin.css?v=finance-dashboard-20261122-2">
+  <link rel="stylesheet" href="css/admin.css?v=single-scroll-20261123-1">
 </head>
 
 <body>
@@ -667,9 +667,21 @@
                 </select>
               </label>
 
+              <label id="financeInventoryQuantityWrap" hidden>
+                Unidades recibidas
+                <input
+                  name="quantity"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value="1"
+                >
+              </label>
+
               <small>
-                Al elegir un producto, se cargará su proveedor habitual
-                si lo registraste en el catálogo.
+                Elige un producto y la cantidad recibida para actualizar el
+                stock compartido con la tienda pública. El proveedor habitual
+                se cargará si está registrado en el catálogo.
               </small>
 
             </div>
@@ -807,6 +819,7 @@
                 <tr>
                   <th>Producto</th>
                   <th>Proveedor</th>
+                  <th>Stock actual</th>
                   <th>Precio</th>
                   <th>Costo unitario</th>
                   <th>Margen estimado</th>
@@ -1080,8 +1093,8 @@
   <!-- Netlify eliminado del HTML -->
   <!-- La conexión debe realizarse desde admin.js hacia Appwrite -->
 
-  <script src="js/config.js?v=appwrite-20261122-2"></script>
-  <script src="js/admin.js?v=finance-dashboard-20261122-2" defer></script>
+  <script src="js/config.js?v=finance-sync-20261123-1"></script>
+  <script src="js/admin.js?v=single-scroll-20261123-1" defer></script>
 
 </body>
 </html>

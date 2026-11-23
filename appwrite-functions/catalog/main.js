@@ -1,5 +1,6 @@
 // Appwrite Function: catálogo público y reserva de stock de YC NICE LADY.
 // Las claves viven solo en las variables de entorno de la Function.
+import { randomBytes } from 'node:crypto';
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
@@ -19,7 +20,8 @@ function getConfig() {
     project: process.env.APPWRITE_PROJECT_ID,
     key: process.env.APPWRITE_API_KEY,
     database: process.env.APPWRITE_DATABASE_ID,
-    table: process.env.APPWRITE_PRODUCTS_TABLE_ID
+    table: process.env.APPWRITE_PRODUCTS_TABLE_ID,
+    analyticsTable: process.env.APPWRITE_ANALYTICS_TABLE_ID
   };
 
   if (!config.project || !config.key || !config.database || !config.table) {
@@ -29,10 +31,10 @@ function getConfig() {
   return config;
 }
 
-async function tableApi(config, path, { method = 'GET', body } = {}) {
+async function tableApi(config, path, { method = 'GET', body, table = config.table } = {}) {
   const url =
     `${config.endpoint}/tablesdb/${encodeURIComponent(config.database)}` +
-    `/tables/${encodeURIComponent(config.table)}${path}`;
+    `/tables/${encodeURIComponent(table)}${path}`;
 
   const response = await fetch(url, {
     method,
@@ -83,6 +85,38 @@ function parseKitItems(value) {
   }
 
   return [];
+}
+
+async function savePublicEvent(config, event, { reservedOrder = false } = {}) {
+  if (!config.analyticsTable) {
+    throw new HttpError(503, 'La captura de estadísticas no está configurada.');
+  }
+
+  const eventType = String(event.event_type || '');
+
+  if (!['catalog_view', 'product_view', 'add_to_cart', 'whatsapp_click'].includes(eventType)) {
+    throw new HttpError(400, 'Evento inválido.');
+  }
+
+  if (eventType === 'whatsapp_click' && !reservedOrder) {
+    throw new HttpError(400, 'Los pedidos por WhatsApp solo se registran después de reservar el stock.');
+  }
+
+  const data = {
+    event_type: eventType,
+    created_at: new Date().toISOString(),
+    product_id: String(event.product_id || '').slice(0, 128),
+    product_name: String(event.product_name || '').slice(0, 160),
+    quantity: Math.max(1, Math.min(1000, Math.trunc(Number(event.quantity) || 1)))
+  };
+
+  const id = randomBytes(12).toString('hex');
+  await tableApi(config, '/rows', {
+    method: 'POST',
+    table: config.analyticsTable,
+    body: { rowId: id, data }
+  });
+  return id;
 }
 
 async function loadCatalog(config) {
@@ -149,6 +183,7 @@ async function reserveStock(config, items, report) {
   }
 
   const entries = [...wanted];
+  const productRows = new Map();
 
   // 1. Verificar todo antes de descontar nada.
   await Promise.all(
@@ -158,6 +193,8 @@ async function reserveStock(config, items, report) {
       if (row.is_active === false || Number(row.stock) < quantity) {
         throw new HttpError(409, `Sin stock suficiente de ${row.name}.`);
       }
+
+      productRows.set(id, row);
     })
   );
 
@@ -171,13 +208,58 @@ async function reserveStock(config, items, report) {
     )
   );
 
-  if (results.every(result => result.status === 'fulfilled')) return;
-
-  // 3. Algo falló: devolver el stock de los que sí se descontaron.
   const applied = entries.filter(
     (_, index) => results[index].status === 'fulfilled'
   );
 
+  if (results.every(result => result.status === 'fulfilled')) {
+    const eventIds = [];
+
+    try {
+      for (const [id, quantity] of entries) {
+        eventIds.push(await savePublicEvent(config, {
+          event_type: 'whatsapp_click',
+          product_id: id,
+          product_name: productRows.get(id)?.name,
+          quantity
+        }, { reservedOrder: true }));
+      }
+
+      return;
+    } catch (eventError) {
+      const eventCleanup = await Promise.allSettled(
+        eventIds.map(eventId =>
+          tableApi(config, `/rows/${encodeURIComponent(eventId)}`, {
+            method: 'DELETE',
+            table: config.analyticsTable
+          })
+        )
+      );
+      const stockRollback = await Promise.allSettled(
+        entries.map(([id, quantity]) =>
+          tableApi(config, `/rows/${encodeURIComponent(id)}/stock/increment`, {
+            method: 'PATCH',
+            body: { value: quantity }
+          })
+        )
+      );
+      const failures = [
+        ...eventCleanup.filter(result => result.status === 'rejected'),
+        ...stockRollback.filter(result => result.status === 'rejected')
+      ];
+
+      if (failures.length) {
+        throw new HttpError(
+          500,
+          `${eventError.message} No se pudo revertir por completo el pedido reservado.`
+        );
+      }
+
+      throw new HttpError(503, `No se pudo registrar el pedido en estadísticas; se devolvió el stock. ${eventError.message}`);
+    }
+  }
+
+  // 3. Algo falló: devolver el stock de los que sí se descontaron.
   const rollback = await Promise.allSettled(
     applied.map(([id, quantity]) =>
       tableApi(config, `/rows/${encodeURIComponent(id)}/stock/increment`, {
@@ -189,9 +271,7 @@ async function reserveStock(config, items, report) {
 
   rollback
     .filter(result => result.status === 'rejected')
-    .forEach(result =>
-      report?.(`No se pudo devolver el stock: ${result.reason?.message}`)
-    );
+    .forEach(result => report?.(`No se pudo devolver el stock: ${result.reason?.message}`));
 
   throw new HttpError(409, 'El stock cambió antes de confirmar el pedido.');
 }
@@ -204,6 +284,11 @@ async function catalogHandler({ req, res, log, error }) {
     if (Array.isArray(body?.order_items)) {
       await reserveStock(config, body.order_items, error);
       log?.('Stock reservado.');
+      return res.json({ success: true });
+    }
+
+    if (body && Object.hasOwn(body, 'event_type')) {
+      await savePublicEvent(config, body);
       return res.json({ success: true });
     }
 

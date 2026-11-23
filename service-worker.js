@@ -1,5 +1,5 @@
-const VERSION = 'finance-analytics-20261122-3';
-const SHELL_CACHE = 'yc-nice-lady-shell-v18-finance-analytics';
+const VERSION = 'finance-sync-20261123-1';
+const SHELL_CACHE = 'yc-nice-lady-shell-v20-finance-sync';
 const IMAGE_CACHE = 'yc-nice-lady-images-v2';
 const IMAGE_CACHE_LIMIT = 120;
 

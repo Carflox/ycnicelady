@@ -1,6 +1,6 @@
 const config = window.YCNiceLadyConfig || {};
 const {
-  productsBucket: PRODUCTS_BUCKET,
+  appwriteProductsBucket: PRODUCTS_BUCKET,
   appwriteEndpoint: APPWRITE_ENDPOINT,
   appwriteProjectId: APPWRITE_PROJECT_ID,
   appwriteProductsFunctionId: APPWRITE_PRODUCTS_FUNCTION_ID,
@@ -14,7 +14,7 @@ const missingConfig = [
   ['appwriteProjectId', APPWRITE_PROJECT_ID],
   ['appwriteProductsFunctionId', APPWRITE_PRODUCTS_FUNCTION_ID],
   ['appwriteOrdersFunctionId', APPWRITE_ORDERS_FUNCTION_ID],
-  ['productsBucket', PRODUCTS_BUCKET]
+  ['appwriteProductsBucket', PRODUCTS_BUCKET]
 ].filter(([, value]) => !value).map(([name]) => name);
 
 if (missingConfig.length) {
@@ -205,7 +205,7 @@ function getCartQuantity(id) {
 
 function trackStoreEvent(eventType, { product = null, quantity = 1 } = {}) {
   if (
-    !['catalog_view', 'product_view', 'add_to_cart', 'whatsapp_click'].includes(eventType) ||
+    !['catalog_view', 'product_view', 'add_to_cart'].includes(eventType) ||
     !APPWRITE_ANALYTICS_FUNCTION_ID
   ) {
     return;
@@ -218,7 +218,6 @@ function trackStoreEvent(eventType, { product = null, quantity = 1 } = {}) {
       ({
         catalog_view: 'Catálogo',
         product_view: 'Producto',
-        whatsapp_click: 'Pedido por WhatsApp'
       })[eventType] ||
       'Producto',
     quantity: Math.max(1, Math.min(1000, Math.trunc(Number(quantity) || 1)))
@@ -905,11 +904,7 @@ async function checkout() {
   try {
     await reserveCartStock(entries);
 
-    // El pedido se registra solo cuando el stock quedó reservado.
-    entries.forEach(({ product, quantity }) =>
-      trackStoreEvent('whatsapp_click', { product, quantity })
-    );
-
+    // La Function registra el pedido pendiente junto con la reserva de stock.
     cart = {};
     saveCart();
 
