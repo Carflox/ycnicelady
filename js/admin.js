@@ -1216,7 +1216,7 @@ async function loadFinance() {
         if (costEdit) {
         const product = productById(costEdit.dataset.costEdit);
         if (!product) return;
-        $('adminFinance').close();
+        closeAdminPanel($('adminFinance'));
         fillProductForm(product);
         } else if (sunatPay || sunatEdit) {
         const id = (sunatPay || sunatEdit).dataset.sunatPay || (sunatPay || sunatEdit).dataset.sunatEdit;
@@ -1254,13 +1254,54 @@ async function loadFinance() {
     }
     });
 
+    const adminPanels = [$('adminFinance'), $('adminAnalytics')];
+    const panelHistoryKey = 'ycNiceLadyAdminPanel';
+
+    function openAdminPanel(dialog) {
+    if (dialog.open) return;
+
+    const state = history.state && typeof history.state === 'object'
+        ? { ...history.state }
+        : {};
+    state[panelHistoryKey] = dialog.id;
+    history.pushState(state, '', location.href);
+    dialog.showModal();
+    }
+
+    function closeAdminPanel(dialog) {
+    if (!dialog.open) return;
+
+    if (history.state?.[panelHistoryKey] === dialog.id) {
+        history.back();
+    } else {
+        dialog.close();
+    }
+    }
+
+    function syncAdminPanelWithHistory() {
+    const activeId = history.state?.[panelHistoryKey];
+
+    adminPanels.forEach(dialog => {
+        if (dialog.id === activeId && !dialog.open) dialog.showModal();
+        else if (dialog.id !== activeId && dialog.open) dialog.close();
+    });
+    }
+
+    window.addEventListener('popstate', syncAdminPanelWithHistory);
+    adminPanels.forEach(dialog => {
+    dialog.addEventListener('cancel', event => {
+        event.preventDefault();
+        closeAdminPanel(dialog);
+    });
+    });
+
     $('openFinance').addEventListener('click', () => {
     resetFinanceForms();
-    $('adminFinance').showModal();
+    openAdminPanel($('adminFinance'));
     loadFinance();
     });
 
-    $('closeFinance').addEventListener('click', () => $('adminFinance').close());
+    $('closeFinance').addEventListener('click', () => closeAdminPanel($('adminFinance')));
 
   // ==========================================
   // ESTADÍSTICAS
@@ -1345,7 +1386,7 @@ async function loadFinance() {
     $('analyticsRange').addEventListener('change', renderAnalytics);
 
     $('openAnalytics').addEventListener('click', async () => {
-    $('adminAnalytics').showModal();
+    openAdminPanel($('adminAnalytics'));
     say($('analyticsStatus'), 'Cargando actividad…');
     $('analyticsContent').hidden = true;
 
@@ -1365,7 +1406,7 @@ async function loadFinance() {
     }
     });
 
-    $('closeAnalytics').addEventListener('click', () => $('adminAnalytics').close());
+    $('closeAnalytics').addEventListener('click', () => closeAdminPanel($('adminAnalytics')));
 
   // ==========================================
   // INICIO
