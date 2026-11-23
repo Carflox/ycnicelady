@@ -126,7 +126,16 @@ async function api(action, data = {}, { timeoutMs = 30000 } = {}) {
 
         const execution = await response.json().catch(() => null);
 
-        if (!response.ok) throw new Error(execution?.message || `Appwrite respondió ${response.status}.`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error(
+                    `Appwrite no encuentra la Function de administración (ID configurado: ${ADMIN_FUNCTION}). ` +
+                    `Verifica que este ID sea el de la Function, que esté en el proyecto ${PROJECT} ` +
+                    `y que exista una versión desplegada.`
+                );
+            }
+            throw new Error(execution?.message || `Appwrite respondió ${response.status}.`);
+        }
 
         if (String(execution?.status).toLowerCase() !== 'completed') {
         throw new Error(execution?.errors || 'La Function de administración no terminó correctamente.');

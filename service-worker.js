@@ -1,6 +1,6 @@
-const VERSION = 'appwrite-20261121-2';
-const SHELL_CACHE = 'yc-nice-lady-shell-v15-appwrite';
-const IMAGE_CACHE = 'yc-nice-lady-images-v1';
+const VERSION = 'appwrite-20261122-1';
+const SHELL_CACHE = 'yc-nice-lady-shell-v16-appwrite';
+const IMAGE_CACHE = 'yc-nice-lady-images-v2';
 const IMAGE_CACHE_LIMIT = 120;
 
 // Debe coincidir con las rutas y versiones de index.html.
@@ -8,7 +8,7 @@ const SHELL_ASSETS = [
     '/',
     '/manifest.webmanifest',
     '/img/pwa-icon.svg',
-    '/img/logo-transparent.png?v=20261121-1',
+    '/img/logo-transparent.png?v=20261122-1',
     `/css/style.css?v=${VERSION}`,
     `/js/script.js?v=${VERSION}`,
     `/js/config.js?v=${VERSION}`,

@@ -293,6 +293,13 @@ function normalizeSearchText(value = '') {
     .trim();
 }
 
+let searchRenderTimer = null;
+
+function scheduleSearchRender() {
+  window.clearTimeout(searchRenderTimer);
+  searchRenderTimer = window.setTimeout(renderProducts, 120);
+}
+
 function categoryFor(product) {
   const category = normalizeSearchText(product.category || '');
 
@@ -1128,10 +1135,10 @@ priceMax.addEventListener('input', () => {
   document.querySelector('#priceMaxLabel').textContent =
     formatMoney(priceMax.value);
 
-  renderProducts();
+  scheduleSearchRender();
 });
 
-productSearch.addEventListener('input', renderProducts);
+productSearch.addEventListener('input', scheduleSearchRender);
 
 document.querySelector('.preview-close')
   .addEventListener('click', () => preview.close());
@@ -1247,15 +1254,25 @@ async function startPublicStore() {
       'serviceWorker' in navigator &&
       window.location.protocol === 'https:'
     ) {
-      await navigator.serviceWorker.register('/service-worker.js');
-      await navigator.serviceWorker.ready;
+      const registerWorker = () =>
+        navigator.serviceWorker.register('/service-worker.js')
+          .catch(error =>
+            console.warn('No se pudo registrar el service worker:', error)
+          );
+
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(registerWorker, { timeout: 3000 });
+      } else {
+        window.setTimeout(registerWorker, 1500);
+      }
     }
   } catch (error) {
     // Si falla el service worker, la tienda debe seguir cargando.
     console.warn('No se pudo registrar el service worker:', error);
   }
 
-  await loadProducts();
+  const cached = loadCachedCatalog();
+  await loadProducts({ loading: !cached });
 }
 
 window.addEventListener('load', startPublicStore, { once: true });

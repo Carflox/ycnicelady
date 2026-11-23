@@ -8,9 +8,5 @@ window.YCNiceLadyConfig = {
     appwriteProductsTableId: '6afc017900116468e591',
     appwriteAnalyticsFunctionId: '',
     appwriteProductsBucket: '6afc6a210013e1e1daad',
-    appwriteApiKey: 'standard_bbcf754b98aa8fe2fd05fd98ad7177a7999b13f4cf66678ae4057595278a18b2197106592251cdd5a0ef601962a254f66dc926c402828c68479bdd39a42d3eadb92b9f5298db2713be0e7e8336aa90bb9d3d82d851d68fc24c706cc431be623e464ce249cea55855a9cfc99a8daa594971ef94ff84840176347464702d365b92',
-    appwriteApiKeyFunction: 'standard_59244224f725b5cff855aefd70c1fc0ccd21fac395b37d13579c20023cf35c3d5467728fc423df1271a400cca09ae92daa16e3d6a9217f75c644a2afed60b6efe3746307a415a50bc01e4845da5a9a21cc10c745653595a520da1b9e28fe82aa1176b9beac8993533f55ebabf449b150a4f68252b9dae355a196955a1ef1f5b8',
-    appwriteWhatsappNumber: '51930197471',
-    smtpUser: 'ycnicelady@gmail.com',
-    smtpAppPassword: 'cqjf fpej clhs uobb'
+    whatsappNumber: '51930197471'
 };
