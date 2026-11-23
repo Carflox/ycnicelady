@@ -9,7 +9,7 @@
     const ADMIN_FUNCTION = config.appwriteAdminFunctionId;
     const BUCKET = config.appwriteProductsBucket;
     const TOKEN_KEY = 'yc-nice-lady-admin-token';
-    const KIT_CATEGORIES = ['libros', 'set', 'kits'];
+    const KIT_CATEGORIES = ['libros', 'set'];
 
 const COST_LABELS = {
     productos: 'Compra a proveedor / inventario',
@@ -89,6 +89,18 @@ function imageUrl(path) {
     if (!fileId || !ENDPOINT || !PROJECT || !BUCKET) return '';
 
     return `${ENDPOINT}/storage/buckets/${encodeURIComponent(BUCKET)}/files/${encodeURIComponent(fileId)}/view?project=${encodeURIComponent(PROJECT)}`;
+}
+
+function normalizeKitItems(value) {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'string' || !value.trim()) return [];
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
 }
 
 const productById = id => products.find(product => String(product.id) === String(id));
@@ -491,12 +503,14 @@ function fillProductForm(product) {
     resetProductForm();
 
     ['id', 'name', 'description', 'category', 'supplier', 'price', 'cost_price', 'stock'].forEach(name => {
-        field(productForm, name).value = product[name === 'id' ? 'id' : name] ?? '';
+        const value = product[name === 'id' ? 'id' : name] ?? '';
+        field(productForm, name).value =
+            name === 'category' && normalize(value) === 'kits' ? 'set' : value;
     });
 
     field(productForm, 'existingImagePath').value = product.image_path || '';
     field(productForm, 'isActive').checked = product.is_active;
-    kitRows = product.kit_items.map(item => ({ ...item, accessory_product_id: item.accessory_product_id || '' }));
+    kitRows = normalizeKitItems(product.kit_items).map(item => ({ ...item, accessory_product_id: item.accessory_product_id || '' }));
     $('formTitle').textContent = `Editar: ${product.name}`;
     $('resetProductForm').hidden = false;
     updateKitVisibility();
